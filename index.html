@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171923">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Digital Color Sheet</title>
+<style>
+:root{color-scheme:dark;--bg:#11131a;--panel:#1b1e29;--panel2:#252938;--text:#f4f5f8;--muted:#a8adbd;--accent:#dc3b3b;--sheet:rgba(220,59,59,.58)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100dvh}
+button,input{font:inherit}
+button{border:0;border-radius:13px;background:var(--panel2);color:var(--text);padding:12px 15px;font-weight:650;cursor:pointer}
+button:active{transform:scale(.98)}
+.app{max-width:900px;margin:auto;padding:env(safe-area-inset-top) 16px calc(22px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 14px;gap:10px}
+h1{font-size:21px;margin:0;letter-spacing:-.4px}
+.sub{color:var(--muted);font-size:12px;margin-top:4px}
+.pill{font-size:12px;color:#c8f5d5;background:#173b2a;padding:7px 10px;border-radius:99px}
+.panel{background:var(--panel);border:1px solid #303545;border-radius:18px;padding:15px;margin-bottom:14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.section-title{font-weight:750;font-size:14px;margin-bottom:12px}
+.color-row{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.color-btn{padding:12px 8px;border:2px solid transparent}
+.color-btn[aria-pressed=true]{border-color:white;box-shadow:0 0 0 2px #ffffff30}
+.red{background:#d93636}.green{background:#16894b}.blue{background:#2868d8}
+.range-row{display:flex;align-items:center;gap:12px}
+input[type=range]{width:100%;accent-color:#e45a5a}
+.value{font-variant-numeric:tabular-nums;color:var(--muted);min-width:42px;text-align:right}
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.primary{background:#e04444;color:white}
+.secondary{background:#303647}
+input[type=file]{display:none}
+.file-label{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#303647;border-radius:13px;padding:12px 15px;font-weight:700;cursor:pointer}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{flex:1}.tab[aria-pressed=true]{background:#414a61;outline:1px solid #77829d}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:10px}
+.thumb{background:#252938;border:1px solid #363c4d;border-radius:13px;overflow:hidden;min-width:0;text-align:left;padding:0}
+.thumb img{width:100%;height:105px;object-fit:cover;display:block;background:#111}
+.thumb .fname{display:block;padding:8px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{border:1px dashed #42495d;border-radius:15px;padding:24px 16px;text-align:center;color:var(--muted);line-height:1.6}
+.viewer{display:none;position:fixed;inset:0;z-index:10;background:#090a0f;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);flex-direction:column}
+.viewer.open{display:flex}
+.viewer-head,.viewer-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#171a24;min-height:56px}
+.viewer-head .filename{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;flex:1;text-align:center}
+.stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:pan-y}
+.stage img{max-width:100%;max-height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none;transform-origin:center;touch-action:pan-y}
+.sheet{position:absolute;inset:0;pointer-events:none;background:var(--sheet);display:none}
+.sheet.on{display:block}
+.stage.pdf-stage{display:block;overflow:auto;background:#333}
+#pdfCanvas{display:block;max-width:100%;height:auto;margin:10px auto;box-shadow:0 2px 18px #0009;background:white}
+.tap-hint{font-size:11px;color:var(--muted);text-align:center}
+.small{font-size:12px;color:var(--muted)}
+.viewer-foot button{padding:10px 12px}
+.notice{font-size:12px;color:var(--muted);line-height:1.55;margin-top:10px}
+.hidden{display:none!important}
+@media(min-width:700px){.app{padding-left:24px;padding-right:24px}.thumb img{height:135px}.viewer-head,.viewer-foot{padding-left:22px;padding-right:22px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div><h1>Digital Color Sheet</h1><div class="sub">写真・PDF用のデジタル暗記シート</div></div>
+    <span class="pill" id="statusPill">フィルター OFF</span>
+  </header>
+
+  <section class="panel">
+    <div class="row"><div class="section-title">フィルター設定</div><button id="toggleBtn" class="primary">OFF</button></div>
+    <div class="color-row" role="group" aria-label="フィルター色">
+      <button class="color-btn red" data-color="red" aria-pressed="true">赤</button>
+      <button class="color-btn green" data-color="green" aria-pressed="false">緑</button>
+      <button class="color-btn blue" data-color="blue" aria-pressed="false">青</button>
+    </div>
+    <div class="row" style="margin-top:17px"><div class="section-title" style="margin:0">不透明度</div><span class="value" id="opacityValue">58%</span></div>
+    <div class="range-row"><input id="opacity" type="range" min="0" max="100" value="58" aria-label="不透明度"></div>
+    <div class="notice">フィルターは閲覧画面の写真・PDF表示部分だけに重なります。設定や操作ボタンには適用されません。</div>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">ファイルを追加</div>
+    <div class="actions">
+      <label class="file-label" for="photoInput">写真を選択</label>
+      <input id="photoInput" type="file" accept="image/*" multiple>
+      <label class="file-label" for="fileInput">ファイルを選択</label>
+      <input id="fileInput" type="file" accept="image/*,.pdf,application/pdf" multiple>
+    </div>
+    <div class="notice">選択した写真・PDFをこの画面で閲覧できます。ブラウザの仕様上、最初に許可しても写真ライブラリ全体を常時自動監視することはできません。新しい項目は「選択」から追加してください。</div>
+  </section>
+
+  <section class="panel">
+    <div class="tabs">
+      <button class="tab" id="allTab" aria-pressed="true">すべて</button>
+      <button class="tab" id="photoTab" aria-pressed="false">写真</button>
+      <button class="tab" id="pdfTab" aria-pressed="false">PDF</button>
+    </div>
+    <div class="row" style="margin-bottom:12px"><div class="section-title" style="margin:0">ライブラリ</div><span class="small" id="count">0件</span></div>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty">まだファイルがありません。<br>「写真を選択」または「ファイルを選択」から追加してください。</div>
+  </section>
+</div>
+
+<div class="viewer" id="viewer" aria-hidden="true">
+  <div class="viewer-head">
+    <button id="closeViewer" aria-label="閉じる">戻る</button>
+    <div class="filename" id="viewerName">ファイル</div>
+    <button id="viewerToggle" class="primary">OFF</button>
+  </div>
+  <div class="stage" id="stage">
+    <img id="viewImage" class="hidden" alt="選択した画像">
+    <canvas id="pdfCanvas" class="hidden"></canvas>
+    <div class="sheet" id="sheet"></div>
+  </div>
+  <div class="viewer-foot">
+    <button id="prevBtn">‹ 前へ</button>
+    <span class="tap-hint" id="pageInfo">タップ：フィルター切替 ／ スワイプ：移動</span>
+    <button id="nextBtn">次へ ›</button>
+  </div>
+</div>
+
+<script type="module">
+const $=id=>document.getElementById(id);
+const state={items:[],filter:false,color:'red',opacity:58,tab:'all',index:0,pdf:null,pdfPage:1,scale:1};
+const colors={red:[220,45,45],green:[24,150,78],blue:[38,104,216]};
+let pdfjs=null;
+try{
+  pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+}catch(e){console.warn('PDF.js could not be loaded; PDF preview may be unavailable offline.',e);}
+
+function sheetColor(){
+  const [r,g,b]=colors[state.color];
+  return `rgba(${r},${g},${b},${state.opacity/100})`;
+}
+function updateFilter(){
+  document.documentElement.style.setProperty('--sheet',sheetColor());
+  $('sheet').classList.toggle('on',state.filter);
+  $('toggleBtn').textContent=state.filter?'ON':'OFF';
+  $('viewerToggle').textContent=state.filter?'ON':'OFF';
+  $('statusPill').textContent=`フィルター ${state.filter?'ON':'OFF'}`;
+}
+function setFilter(v){state.filter=v;updateFilter();}
+$('toggleBtn').addEventListener('click',()=>setFilter(!state.filter));
+$('viewerToggle').addEventListener('click',()=>setFilter(!state.filter));
+document.querySelectorAll('[data-color]').forEach(btn=>btn.addEventListener('click',()=>{
+  state.color=btn.dataset.color;
+  document.querySelectorAll('[data-color]').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));
+  updateFilter();
+}));
+$('opacity').addEventListener('input',e=>{
+  state.opacity=Number(e.target.value);$('opacityValue').textContent=state.opacity+'%';updateFilter();
+});
+
+function addFiles(fileList){
+  for(const file of fileList){
+    const type=file.type;
+    if(type.startsWith('image/')){
+      const url=URL.createObjectURL(file);
+      state.items.push({file,name:file.name,url,type:'image'});
+    }else if(type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
+      const url=URL.createObjectURL(file);
+      state.items.push({file,name:file.name,url,type:'pdf'});
+    }
+  }
+  renderGrid();
+}
+$('photoInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+$('fileInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+
+function filteredItems(){
+  return state.items.filter(item=>state.tab==='all'||(state.tab==='photo'?item.type==='image':item.type==='pdf'));
+}
+function renderGrid(){
+  const items=filteredItems();$('grid').innerHTML='';$('count').textContent=items.length+'件';
+  $('empty').classList.toggle('hidden',items.length>0);
+  for(const item of items){
+    const originalIndex=state.items.indexOf(item);
+    const b=document.createElement('button');b.className='thumb';
+    if(item.type==='image'){
+      const img=document.createElement('img');img.src=item.url;img.alt='';b.append(img);
+    }else{
+      const preview=document.createElement('div');preview.style.cssText='height:105px;display:grid;place-items:center;color:#e8eaf2;background:#303647;font-size:34px';preview.textContent='PDF';b.append(preview);
+    }
+    const name=document.createElement('span');name.className='fname';name.textContent=item.name;b.append(name);
+    b.addEventListener('click',()=>openItem(originalIndex));$('grid').append(b);
+  }
+}
+function setTab(tab){
+  state.tab=tab;
+  [['allTab','all'],['photoTab','photo'],['pdfTab','pdf']].forEach(([id,t])=>$(id).setAttribute('aria-pressed',String(tab===t)));
+  renderGrid();
+}
+$('allTab').onclick=()=>setTab('all');$('photoTab').onclick=()=>setTab('photo');$('pdfTab').onclick=()=>setTab('pdf');
+
+async function openItem(index){
+  state.index=index;state.pdf=null;state.pdfPage=1;state.scale=1;
+  const item=state.items[index];$('viewer').classList.add('open');$('viewer').setAttribute('aria-hidden','false');
+  $('viewerName').textContent=item.name;$('viewImage').classList.add('hidden');$('pdfCanvas').classList.add('hidden');$('stage').classList.remove('pdf-stage');
+  if(item.type==='image'){
+    $('viewImage').src=item.url;$('viewImage').classList.remove('hidden');$('pageInfo').textContent='タップ：フィルター切替 ／ スワイプ：写真移動';
+  }else{
+    $('stage').classList.add('pdf-stage');
+    if(!pdfjs){$('pageInfo').textContent='PDF表示にはインターネット接続が必要です';return;}
+    try{
+      const data=await item.file.arrayBuffer();
+      state.pdf=await pdfjs.getDocument({data}).promise;
+      await renderPdfPage();
+    }catch(err){$('pageInfo').textContent='このPDFを読み込めませんでした';console.error(err);}
+  }
+  updateFilter();
+}
+async function renderPdfPage(){
+  if(!state.pdf)return;
+  const page=await state.pdf.getPage(state.pdfPage);
+  const stage=$('stage');const base=page.getViewport({scale:1});
+  const scale=Math.min((stage.clientWidth-20)/base.width,(stage.clientHeight-20)/base.height,2);
+  const viewport=page.getViewport({scale:Math.max(.5,scale)});
+  const canvas=$('pdfCanvas'),ctx=canvas.getContext('2d');
+  canvas.width=viewport.width*devicePixelRatio;canvas.height=viewport.height*devicePixelRatio;
+  canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
+  await page.render({canvasContext:ctx,viewport,transform:devicePixelRatio!==1?[devicePixelRatio,0,0,devicePixelRatio,0,0]:null}).promise;
+  canvas.classList.remove('hidden');
+  $('pageInfo').textContent=`タップ：フィルター切替 ／ PDF ${state.pdfPage} / ${state.pdf.numPages}`;
+}
+function closeViewer(){$('viewer').classList.remove('open');$('viewer').setAttribute('aria-hidden','true');state.pdf=null;}
+$('closeViewer').onclick=closeViewer;
+async function move(delta){
+  const item=state.items[state.index];if(!item)return;
+  if(item.type==='pdf'&&state.pdf){
+    const next=state.pdfPage+delta;if(next<1||next>state.pdf.numPages)return;
+    state.pdfPage=next;await renderPdfPage();return;
+  }
+  const visible=filteredItems(),pos=visible.indexOf(item),next=visible[pos+delta];
+  if(next)await openItem(state.items.indexOf(next));
+}
+$('prevBtn').onclick=()=>move(-1);$('nextBtn').onclick=()=>move(1);
+
+// Short tap toggles the sheet. Long press and swipes do not.
+let pointerStart=null;
+const stage=$('stage');
+stage.addEventListener('pointerdown',e=>{
+  if(e.target.closest('button'))return;
+  pointerStart={x:e.clientX,y:e.clientY,time:Date.now(),id:e.pointerId};
+});
+stage.addEventListener('pointerup',e=>{
+  if(!pointerStart||pointerStart.id!==e.pointerId)return;
+  const dx=e.clientX-pointerStart.x,dy=e.clientY-pointerStart.y,duration=Date.now()-pointerStart.time;
+  pointerStart=null;
+  if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.25){move(dx<0?1:-1);return;}
+  if(Math.abs(dx)<12&&Math.abs(dy)<12&&duration<350){setFilter(!state.filter);}
+});
+stage.addEventListener('pointercancel',()=>pointerStart=null);
+stage.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('keydown',e=>{
+  if(!$('viewer').classList.contains('open'))return;
+  if(e.key==='Escape')closeViewer();
+  if(e.key==='ArrowRight')move(1);
+  if(e.key==='ArrowLeft')move(-1);
+});
+updateFilter();renderGrid();
+</script>
+</body>
+</html>
